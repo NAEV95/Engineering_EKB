@@ -1,0 +1,73 @@
+---
+title: "R Notebook zScale"
+output: html_notebook
+---
+```{r}
+library(stringi)
+library(Peptides)
+library(bio3d)
+setwd("D:/Batches_Sim/Batch_3")
+files <- list.files(pattern="EKB1m.pdb$", recursive = TRUE)
+files <- files[order(nchar(files), files)]
+files <- paste0("D:/Batches_Sim/Batch_3/", files)
+
+sequences <- list()
+for (file in files){
+  pdb <- read.pdb(file)
+  seq <- pdbseq(pdb, inds = NULL, aa1 = TRUE)
+  sequences[[length(sequences) + 1 ]] <- seq
+}
+```
+```{r}
+print(length(sequences))
+```
+
+```{r}
+Scales_variables <- list()
+for (i in sequences){
+  new_element <- (aaDescriptors(i))
+  Scales_variables[[length(Scales_variables) + 1]] <- new_element
+}
+```
+
+```{r}
+library(readxl)
+library(writexl)
+exceldata <- read_excel("C:\\Users\\venan\\OneDrive\\Desktop\\Work\\Scripts_for_Nick\\ML\\Dataset_Nick_heading.xlsx")
+dfdata <- data.frame(exceldata)
+df_scales <- as.data.frame(Scales_variables)
+df_scales
+```
+
+
+```{r}
+col_names <- list()
+for (i in names(df_scales)){
+  new_name <- i
+  col_names[[length(col_names) + 1]] <- new_name
+}
+col_sum <- data.frame(colSums(df_scales))
+new_df_col_names <- col_names[1:66]
+
+```
+
+```{r}
+indeces <- grep("PP1", colnames(df_scales))
+df <- data.frame()
+for (i in indeces){
+    df <- rbind(df, col_sum[i:(i+65),])
+  }
+df
+```
+```{r}
+names(df) <- new_df_col_names
+```
+```{r}
+new_df <- cbind(dfdata, df)
+write_xlsx(new_df, "C:\\Users\\venan\\OneDrive\\Desktop\\Work\\Scripts_for_Nick\\ML\\new_df_66.xlsx")
+
+```
+
+```{r}
+new_df
+```
