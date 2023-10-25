@@ -1,0 +1,9 @@
+parm protein_ok.pdb [keapwt]
+trajin md-pbc.trr
+#reference  parm protein_ok.pdb [4dx5_C]
+#reference  [ref]
+#rms fit ref [ref] :1-235&!@H= :1-235&!@H= 
+#rms whole ref [ref] :1-235@CA,C,N :1-235@CA,C,N out rmsd_backbone.dat time 0.1
+secstruct protein out ss-protein.gnu :1-235 sumout ss-cumulative.gnu
+run
+quit
