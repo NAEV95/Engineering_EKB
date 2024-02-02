@@ -8,7 +8,7 @@ This project focuses on the prediction of mutation effects on protein function u
 
 3. Training and Analysis of ML Models: Utilized shallow machine learning models and a neural network to train and analyze the dataset for predicting mutation effects on protein function [Python_scripts/Averages_Datasets_Light_copy.ipynb](Python_scripts/Averages_Datasets_Light_copy.ipynb). 
 
-
+<img src="Figure/Abstract_fig.png" alt="Abstract" width="400"/>
 ![Abstract_fig (2).tiff](Abstract_fig.png)
 
 Please refer to the respective sections and code snippets in this repository for detailed implementation and results.
