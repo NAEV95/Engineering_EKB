@@ -1,0 +1,69 @@
+# Default configuration file for ProMut-MD
+
+# Paths
+paths:
+  data:
+    raw: data/raw/
+    processed: data/processed/
+    results: data/results/
+  figures: figures/
+  models: models/
+
+# MD Simulation parameters
+md_simulation:
+  gromacs:
+    version: "2019.3"
+    force_field: "amber99sb-ildn"
+    water_model: "tip3p"
+    box_distance: 1.0  # nm
+    salt_concentration: 0.15  # mol/L
+    temperature: 300  # K
+    pressure: 1.0  # bar
+    time_step: 0.002  # ps
+    simulation_time: 100  # ns
+    trajectory_save_interval: 10  # ps
+
+# Feature extraction parameters
+feature_extraction:
+  pocket_analysis:
+    tool: "mdpocket"
+    min_alpha_sphere_radius: 3.0
+    max_alpha_sphere_radius: 6.0
+  sequence_features:
+    enabled: true
+  dynamic_features:
+    enabled: true
+    rmsd:
+      enabled: true
+      reference: "first_frame"
+    rg:
+      enabled: true
+      selection: "protein"
+  secondary_structure:
+    enabled: true
+    algorithm: "dssp"
+
+# Model parameters
+model:
+  type: "lightgbm"
+  train_test_split: 0.8
+  random_seed: 42
+  cross_validation: 5
+  lightgbm:
+    learning_rate: 0.05
+    max_depth: 5
+    n_estimators: 200
+    reg_alpha: 0.1
+    reg_lambda: 1.0
+    subsample: 0.8
+    colsample_bytree: 0.8
+
+# Visualization settings
+visualization:
+  figures:
+    format: "png"
+    dpi: 300
+    save: true
+  interactive:
+    enabled: true
+    backend: "plotly" 

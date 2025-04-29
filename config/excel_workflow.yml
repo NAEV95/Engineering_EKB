@@ -1,0 +1,112 @@
+# Configuration for Excel-based workflow
+
+# Paths
+paths:
+  data:
+    raw: data/raw/
+    processed: data/processed/
+    results: data/results/
+  figures: figures/
+  models: models/
+
+# Data configuration
+data:
+  type: "features"
+  features_file: "data/raw/mutation_data.xlsx"
+  preprocess: true
+  preprocess_params:
+    handle_missing: true
+    missing_strategy: "mean"
+    scale_features: true
+    scale_method: "standard"
+
+# Feature extraction parameters
+feature_extraction:
+  target_column: "DELTA30"  # The column in Excel file containing target values
+  scale_features: true
+  scale_method: "standard"
+  select_features: true
+  k_best: 20
+  selection_method: "k_best"
+
+# Model parameters
+model:
+  type: "lightgbm"
+  target_column: "DELTA30"
+  train_test_split: 0.8
+  random_seed: 42
+  cross_validation: 5
+  feature_scaling: true
+  lightgbm:
+    learning_rate: 0.05
+    max_depth: 5
+    n_estimators: 200
+    reg_alpha: 0.1
+    reg_lambda: 1.0
+    subsample: 0.8
+    colsample_bytree: 0.8
+
+# Visualization settings
+visualization:
+  figures:
+    format: "png"
+    dpi: 300
+    save: true
+  interactive:
+    enabled: true
+    backend: "plotly"
+  top_n_features: 20
+  top_n_features_to_plot: 5
+
+# Excel Workflow Configuration
+
+# Data processing settings
+processing:
+  # Column mappings (source_column: target_column)
+  column_mapping:
+    mutation_id: mutation_id
+    protein: protein_name
+    sequence: aa_sequence
+    position: mutation_position
+  
+  # Data filtering criteria
+  filters:
+    min_sequence_length: 10
+    exclude_proteins: ["Unknown", "Test"]
+  
+  # Processing options
+  options:
+    normalize_sequences: true
+    calculate_statistics: true
+    remove_duplicates: true
+
+# Figure generation settings
+figures:
+  # Generate distribution plots
+  distribution_plots:
+    enabled: true
+    width: 10
+    height: 6
+    dpi: 300
+    format: "png"
+  
+  # Generate heatmaps
+  heatmaps:
+    enabled: true
+    width: 12
+    height: 8
+    dpi: 300
+    colormap: "viridis"
+    format: "png"
+
+# Output settings
+output:
+  # CSV output options
+  csv:
+    delimiter: ","
+    include_header: true
+    encoding: "utf-8"
+  
+  # Figure output options
+  figure_dir: "figures"
+  save_processed_data: true 
