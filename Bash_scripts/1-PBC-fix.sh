@@ -14,6 +14,6 @@ module load compilers/intel/2018/update3
 module load mpi/intel/2018/update3/intel
 module load gromacs/2019.3/intel-2018
 
-cd $SGE_TASK_IDd    
+cd $SGE_TASK_ID
 
 echo 1 | gmx trjconv -s md_0_1.tpr -f md_0_1.trr -o md-pbc.trr -pbc whole -nice -19
