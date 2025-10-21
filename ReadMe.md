@@ -266,5 +266,6 @@ eprint = {
 
 ## Contact
 
-For questions or support, please contact [your.email@example.com](mailto:venanzi.nae@gmail.com)
+For questions or support, please contact [venanzi.nae@gmail.com](mailto:venanzi.nae@gmail.com)
+
 
