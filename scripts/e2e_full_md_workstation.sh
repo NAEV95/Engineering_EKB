@@ -86,7 +86,7 @@ run_gmx() {
   if [ "$GMX_MODE" = "native" ]; then
     "$GMX_BIN" "$@"
   else
-    docker run --rm --gpus all \
+    docker run --rm --interactive --gpus all \
       --user "$(id -u):$(id -g)" \
       --volume "$ROOT_DIR:$ROOT_DIR" \
       --volume "$WORK_ROOT:$WORK_ROOT" \
