@@ -5,7 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK_ROOT="${PROMUT_FULL_MD_ROOT:-$HOME/raid/promut-md-full-md-e2e}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 GMX_BIN="${GMX_BIN:-}"
-GROMACS_CONTAINER="${GROMACS_CONTAINER:-nvcr.io/hpc/gromacs:2023.3}"
+GROMACS_CONTAINER="${GROMACS_CONTAINER:-nvcr.io/hpc/gromacs:2023.2}"
+GROMACS_CONTAINER_FALLBACKS="${GROMACS_CONTAINER_FALLBACKS:-nvcr.io/hpc/gromacs:2023.2 nvcr.io/hpc/gromacs:2022.5}"
 PROMUT_USE_GROMACS_CONTAINER="${PROMUT_USE_GROMACS_CONTAINER:-auto}"
 MD_STEPS="${PROMUT_FULL_MD_STEPS:-500}"
 EQUIL_STEPS="${PROMUT_FULL_MD_EQUIL_STEPS:-100}"
@@ -60,7 +61,25 @@ EOF
   fi
   GMX_MODE="container"
   echo "Native GROMACS was not found; using NGC container: $GROMACS_CONTAINER"
-  docker pull "$GROMACS_CONTAINER"
+  if ! docker pull "$GROMACS_CONTAINER"; then
+    pulled_container=""
+    for candidate in $GROMACS_CONTAINER_FALLBACKS; do
+      if [ "$candidate" = "$GROMACS_CONTAINER" ]; then
+        continue
+      fi
+      echo "Failed to pull $GROMACS_CONTAINER; trying fallback: $candidate"
+      if docker pull "$candidate"; then
+        pulled_container="$candidate"
+        break
+      fi
+    done
+    if [ -z "$pulled_container" ]; then
+      echo "Could not pull any configured GROMACS container image." >&2
+      echo "Set GROMACS_CONTAINER to a valid NGC GROMACS tag and rerun." >&2
+      exit 2
+    fi
+    GROMACS_CONTAINER="$pulled_container"
+  fi
 fi
 
 run_gmx() {
