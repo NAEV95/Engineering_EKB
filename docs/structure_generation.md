@@ -68,3 +68,19 @@ or a `mutation` column containing one-letter substitutions like `A23V`.
 ## Smoke-Test Backend
 
 `--backend simple` is retained for CI and workflow plumbing tests only. It changes residue names in the PDB and validates the requested residue identity, but it does not rebuild side-chain coordinates, optimize rotamers, minimize, or relax the structure. Do not use it for production MD.
+
+## Full MD Workstation E2E
+
+For a real end-to-end MD smoke on the workstation, run:
+
+```bash
+bash scripts/e2e_full_md_workstation.sh
+```
+
+The script uses native `gmx`/`gmx_mpi` when available. If native GROMACS is not installed, it pulls and runs the NGC GROMACS container by default:
+
+```bash
+GROMACS_CONTAINER=nvcr.io/hpc/gromacs:2023.3 bash scripts/e2e_full_md_workstation.sh
+```
+
+This requires Docker with NVIDIA Container Toolkit and a recent host NVIDIA driver. The RTX PRO 6000 Blackwell workstation is expected to work with the container when `docker run --gpus all ... nvidia-smi` can see the GPUs.

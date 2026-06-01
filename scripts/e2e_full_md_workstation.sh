@@ -5,6 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK_ROOT="${PROMUT_FULL_MD_ROOT:-$HOME/raid/promut-md-full-md-e2e}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 GMX_BIN="${GMX_BIN:-}"
+GROMACS_CONTAINER="${GROMACS_CONTAINER:-nvcr.io/hpc/gromacs:2023.3}"
+PROMUT_USE_GROMACS_CONTAINER="${PROMUT_USE_GROMACS_CONTAINER:-auto}"
 MD_STEPS="${PROMUT_FULL_MD_STEPS:-500}"
 EQUIL_STEPS="${PROMUT_FULL_MD_EQUIL_STEPS:-100}"
 MAX_MUTANTS="${PROMUT_FULL_MD_MAX_MUTANTS:-5}"
@@ -34,25 +36,48 @@ echo "== Test suite =="
 python -m pytest -q
 
 echo "== GROMACS check =="
+GMX_MODE="native"
 if [ -z "$GMX_BIN" ]; then
   GMX_BIN="$(command -v gmx || command -v gmx_mpi || true)"
 fi
 if [ -z "$GMX_BIN" ]; then
-  cat >&2 <<'EOF'
-GROMACS was not found. Install GROMACS on the workstation, then rerun.
+  if [ "$PROMUT_USE_GROMACS_CONTAINER" = "0" ]; then
+    cat >&2 <<'EOF'
+GROMACS was not found and container fallback is disabled.
 
-Ubuntu package option, if you have sudo:
-  sudo apt-get update
-  sudo apt-get install -y gromacs
+Install GROMACS, set GMX_BIN=/path/to/gmx, or rerun with container fallback enabled.
+EOF
+    exit 2
+  fi
+  if ! command -v docker >/dev/null 2>&1; then
+    cat >&2 <<'EOF'
+GROMACS was not found, and Docker is not installed or not on PATH.
 
-Conda option:
-  conda install -c conda-forge gromacs
-
+Install GROMACS directly, or install Docker plus NVIDIA Container Toolkit.
 You can also set GMX_BIN=/path/to/gmx.
 EOF
-  exit 2
+    exit 2
+  fi
+  GMX_MODE="container"
+  echo "Native GROMACS was not found; using NGC container: $GROMACS_CONTAINER"
+  docker pull "$GROMACS_CONTAINER"
 fi
-"$GMX_BIN" --version | head -20
+
+run_gmx() {
+  if [ "$GMX_MODE" = "native" ]; then
+    "$GMX_BIN" "$@"
+  else
+    docker run --rm --gpus all \
+      --user "$(id -u):$(id -g)" \
+      --volume "$ROOT_DIR:$ROOT_DIR" \
+      --volume "$WORK_ROOT:$WORK_ROOT" \
+      --workdir "$PWD" \
+      "$GROMACS_CONTAINER" \
+      /usr/bin/nventry -build_base_dir=/usr/local/gromacs -build_default=avx2_256 gmx "$@"
+  fi
+}
+
+run_gmx --version | head -20
 
 GB1_DIR="$WORK_ROOT/gb1"
 FULL_MD_DIR="$WORK_ROOT/full_md"
@@ -179,23 +204,23 @@ run_one_md() {
 
   (
     cd "$sim_dir"
-    "$GMX_BIN" pdb2gmx -f input.pdb -o processed.gro -p topol.top -ff amber99sb-ildn -water tip3p -ignh
-    "$GMX_BIN" editconf -f processed.gro -o boxed.gro -c -d 1.0 -bt cubic
-    "$GMX_BIN" solvate -cp boxed.gro -cs spc216.gro -o solv.gro -p topol.top
-    "$GMX_BIN" grompp -f ions.mdp -c solv.gro -p topol.top -o ions.tpr -maxwarn 2
-    printf 'SOL\n' | "$GMX_BIN" genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral -conc 0.15
-    "$GMX_BIN" grompp -f minim.mdp -c solv_ions.gro -p topol.top -o em.tpr -maxwarn 2
-    "$GMX_BIN" mdrun -deffnm em
-    "$GMX_BIN" grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr -maxwarn 2
-    "$GMX_BIN" mdrun -deffnm nvt
-    "$GMX_BIN" grompp -f md.mdp -c nvt.gro -t nvt.cpt -p topol.top -o md.tpr -maxwarn 2
-    "$GMX_BIN" mdrun -deffnm md
+    run_gmx pdb2gmx -f input.pdb -o processed.gro -p topol.top -ff amber99sb-ildn -water tip3p -ignh
+    run_gmx editconf -f processed.gro -o boxed.gro -c -d 1.0 -bt cubic
+    run_gmx solvate -cp boxed.gro -cs spc216.gro -o solv.gro -p topol.top
+    run_gmx grompp -f ions.mdp -c solv.gro -p topol.top -o ions.tpr -maxwarn 2
+    printf 'SOL\n' | run_gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral -conc 0.15
+    run_gmx grompp -f minim.mdp -c solv_ions.gro -p topol.top -o em.tpr -maxwarn 2
+    run_gmx mdrun -deffnm em
+    run_gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr -maxwarn 2
+    run_gmx mdrun -deffnm nvt
+    run_gmx grompp -f md.mdp -c nvt.gro -t nvt.cpt -p topol.top -o md.tpr -maxwarn 2
+    run_gmx mdrun -deffnm md
 
-    printf '0\n' | "$GMX_BIN" trjconv -s md.tpr -f md.xtc -o md_noPBC.xtc -pbc mol -ur compact
-    printf '4\n4\n' | "$GMX_BIN" rms -s md.tpr -f md_noPBC.xtc -o rmsd_backbone_raw.xvg -tu ps
-    printf '1\n' | "$GMX_BIN" gyrate -s md.tpr -f md_noPBC.xtc -o gyrate_raw.xvg
-    printf '1\n' | "$GMX_BIN" rmsf -s md.tpr -f md_noPBC.xtc -o rmsf_10ns_raw.xvg -res
-    printf 'Potential\n0\n' | "$GMX_BIN" energy -f md.edr -o energy_raw.xvg
+    printf '0\n' | run_gmx trjconv -s md.tpr -f md.xtc -o md_noPBC.xtc -pbc mol -ur compact
+    printf '4\n4\n' | run_gmx rms -s md.tpr -f md_noPBC.xtc -o rmsd_backbone_raw.xvg -tu ps
+    printf '1\n' | run_gmx gyrate -s md.tpr -f md_noPBC.xtc -o gyrate_raw.xvg
+    printf '1\n' | run_gmx rmsf -s md.tpr -f md_noPBC.xtc -o rmsf_10ns_raw.xvg -res
+    printf 'Potential\n0\n' | run_gmx energy -f md.edr -o energy_raw.xvg
 
     strip_xvg rmsd_backbone_raw.xvg rmsd_backbone.dat
     strip_xvg gyrate_raw.xvg gyrate.xvg
