@@ -4,6 +4,7 @@
 import json
 import logging
 import os
+import argparse
 import shutil
 import subprocess
 from datetime import datetime
@@ -78,3 +79,16 @@ def run_simulations(input_dir, output_dir, params=None):
     logger.info("MD simulation inputs staged in %s", output_path)
 
     return str(output_path)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Stage or run MD simulation inputs")
+    parser.add_argument("--input-dir", "--input", dest="input_dir", required=True)
+    parser.add_argument("--output-dir", "--output", dest="output_dir", required=True)
+    args = parser.parse_args(argv)
+    run_simulations(args.input_dir, args.output_dir)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

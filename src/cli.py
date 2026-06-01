@@ -39,6 +39,11 @@ def build_parser():
     excel.add_argument("--output-dir", default="data/processed")
     excel.add_argument("--no-figures", action="store_true")
 
+    build_mutants = subparsers.add_parser("build-mutants", help="Build point-mutant PDB structures")
+    build_mutants.add_argument("--wild-type-pdb", required=True)
+    build_mutants.add_argument("--mutations", required=True)
+    build_mutants.add_argument("--output-dir", required=True)
+
     cleanup = subparsers.add_parser("cleanup", help="Clean generated artifacts")
     cleanup.add_argument("--dry-run", action="store_true")
     cleanup.add_argument("--days", type=int, default=30)
@@ -111,6 +116,12 @@ def main(argv=None):
             return excel_main()
         finally:
             sys.argv = old_argv
+
+    if args.command == "build-mutants":
+        from scripts.structure_generation.build_mutants import build_mutant_structures
+
+        build_mutant_structures(args.wild_type_pdb, args.mutations, args.output_dir)
+        return 0
 
     if args.command == "cleanup":
         from scripts.cleanup import cleanup_repository
