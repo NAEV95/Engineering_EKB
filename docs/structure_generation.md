@@ -17,6 +17,29 @@ promut-md build-mutants \
 
 The FoldX backend runs `RepairPDB` followed by `BuildModel`, validates that the requested residue was introduced, and writes `mutant_manifest.json` with FoldX run directories and mutation codes.
 
+## Installing FoldX
+
+FoldX requires registration/license acceptance, so the repo installer cannot fetch it from `apt`. By default, the installer uses:
+
+```bash
+~/raid/tools/foldx
+```
+
+If you already downloaded the licensed Linux archive, copy it there and run:
+
+```bash
+bash scripts/install_foldx.sh
+```
+
+Or pass an explicit archive/download location:
+
+```bash
+FOLDX_ARCHIVE=/path/to/foldx.zip bash scripts/install_foldx.sh
+FOLDX_DOWNLOAD_URL='https://licensed-download-url' bash scripts/install_foldx.sh
+```
+
+The workstation E2E script automatically checks `~/raid/tools/foldx/foldx` and passes it to `promut-md build-mutants` when present.
+
 ## Mutation CSV
 
 Use either explicit columns:

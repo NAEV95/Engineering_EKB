@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK_ROOT="${PROMUT_E2E_ROOT:-$HOME/raid/promut-md-e2e}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
+FOLDX_INSTALL_DIR="${FOLDX_INSTALL_DIR:-$HOME/raid/tools/foldx}"
+FOLDX_BIN="${FOLDX_BIN:-$FOLDX_INSTALL_DIR/foldx}"
 
 mkdir -p "$WORK_ROOT"
 cd "$ROOT_DIR"
@@ -45,20 +47,52 @@ CSV
 
 echo "== Build mutant structures =="
 STRUCTURE_BACKEND="${PROMUT_STRUCTURE_BACKEND:-}"
+FOLDX_ARG=()
 if [ -z "$STRUCTURE_BACKEND" ]; then
   if command -v foldx >/dev/null 2>&1; then
     STRUCTURE_BACKEND="foldx"
+  elif [ -x "$FOLDX_BIN" ]; then
+    STRUCTURE_BACKEND="foldx"
+    FOLDX_ARG=(--foldx-bin "$FOLDX_BIN")
   else
-    STRUCTURE_BACKEND="simple"
-    echo "WARNING: FoldX was not found; using simple residue-name substitution backend for smoke testing only."
-    echo "Set PROMUT_STRUCTURE_BACKEND=foldx after installing FoldX for production mutant models."
+    LOCAL_FOLDX_ARCHIVE="$(find "$FOLDX_INSTALL_DIR" -maxdepth 1 -type f \
+      \( -iname 'foldx*.zip' -o -iname 'foldx*.tar.gz' -o -iname 'foldx*.tgz' -o -iname 'foldx*.tar.bz2' -o -iname 'foldx*.tbz2' \) \
+      2>/dev/null | head -n 1 || true)"
+    if [ -n "${FOLDX_DOWNLOAD_URL:-}" ] || [ -n "${FOLDX_ARCHIVE:-}" ] || [ -n "$LOCAL_FOLDX_ARCHIVE" ]; then
+      echo "FoldX was not found; attempting install via scripts/install_foldx.sh"
+      bash scripts/install_foldx.sh || true
+    fi
+  fi
+
+  if [ -z "$STRUCTURE_BACKEND" ]; then
+    if command -v foldx >/dev/null 2>&1; then
+      STRUCTURE_BACKEND="foldx"
+    elif [ -x "$FOLDX_BIN" ]; then
+      STRUCTURE_BACKEND="foldx"
+      FOLDX_ARG=(--foldx-bin "$FOLDX_BIN")
+    else
+      STRUCTURE_BACKEND="simple"
+      echo "WARNING: FoldX was not found; using simple residue-name substitution backend for smoke testing only."
+      echo "Run scripts/install_foldx.sh or set FOLDX_BIN, then set PROMUT_STRUCTURE_BACKEND=foldx for production mutant models."
+    fi
+  fi
+elif [ "$STRUCTURE_BACKEND" = "foldx" ]; then
+  if [ -x "$FOLDX_BIN" ]; then
+    FOLDX_ARG=(--foldx-bin "$FOLDX_BIN")
+  elif ! command -v foldx >/dev/null 2>&1; then
+    echo "FoldX backend requested; attempting install via scripts/install_foldx.sh"
+    bash scripts/install_foldx.sh
+    if [ -x "$FOLDX_BIN" ]; then
+      FOLDX_ARG=(--foldx-bin "$FOLDX_BIN")
+    fi
   fi
 fi
 promut-md build-mutants \
   --wild-type-pdb "$GB1_DIR/1PGA.pdb" \
   --mutations "$GB1_DIR/gb1_mutations.csv" \
   --output-dir "$GB1_DIR/mutants" \
-  --backend "$STRUCTURE_BACKEND"
+  --backend "$STRUCTURE_BACKEND" \
+  "${FOLDX_ARG[@]}"
 
 echo "== Stage MD inputs =="
 python scripts/md_simulations/run_md.py \
