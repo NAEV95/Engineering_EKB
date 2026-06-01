@@ -227,7 +227,9 @@ run_one_md() {
     run_gmx editconf -f processed.gro -o boxed.gro -c -d 1.0 -bt cubic
     run_gmx solvate -cp boxed.gro -cs spc216.gro -o solv.gro -p topol.top
     run_gmx grompp -f ions.mdp -c solv.gro -p topol.top -o ions.tpr -maxwarn 2
-    printf 'SOL\n' | run_gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral -conc 0.15
+    if ! printf '13\n' | run_gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral -conc 0.15; then
+      printf 'SOL\n' | run_gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral -conc 0.15
+    fi
     run_gmx grompp -f minim.mdp -c solv_ions.gro -p topol.top -o em.tpr -maxwarn 2
     run_gmx mdrun -deffnm em
     run_gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr -maxwarn 2
