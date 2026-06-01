@@ -6,6 +6,7 @@ WORK_ROOT="${PROMUT_E2E_ROOT:-$HOME/raid/promut-md-e2e}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 FOLDX_INSTALL_DIR="${FOLDX_INSTALL_DIR:-$HOME/raid/tools/foldx}"
 FOLDX_BIN="${FOLDX_BIN:-$FOLDX_INSTALL_DIR/foldx}"
+PROMUT_ALLOW_PDBFIXER_INSTALL="${PROMUT_ALLOW_PDBFIXER_INSTALL:-1}"
 
 mkdir -p "$WORK_ROOT"
 cd "$ROOT_DIR"
@@ -48,6 +49,18 @@ CSV
 echo "== Build mutant structures =="
 STRUCTURE_BACKEND="${PROMUT_STRUCTURE_BACKEND:-}"
 FOLDX_ARG=()
+ensure_pdbfixer_backend() {
+  if python -c 'import pdbfixer, openmm' >/dev/null 2>&1; then
+    return 0
+  fi
+  if [ "$PROMUT_ALLOW_PDBFIXER_INSTALL" != "1" ]; then
+    return 1
+  fi
+  echo "PDBFixer/OpenMM not found; installing open-source interim structure backend"
+  python -m pip install openmm pdbfixer
+  python -c 'import pdbfixer, openmm'
+}
+
 if [ -z "$STRUCTURE_BACKEND" ]; then
   if command -v foldx >/dev/null 2>&1; then
     STRUCTURE_BACKEND="foldx"
@@ -70,10 +83,12 @@ if [ -z "$STRUCTURE_BACKEND" ]; then
     elif [ -x "$FOLDX_BIN" ]; then
       STRUCTURE_BACKEND="foldx"
       FOLDX_ARG=(--foldx-bin "$FOLDX_BIN")
+    elif ensure_pdbfixer_backend; then
+      STRUCTURE_BACKEND="pdbfixer"
     else
       STRUCTURE_BACKEND="simple"
-      echo "WARNING: FoldX was not found; using simple residue-name substitution backend for smoke testing only."
-      echo "Run scripts/install_foldx.sh or set FOLDX_BIN, then set PROMUT_STRUCTURE_BACKEND=foldx for production mutant models."
+      echo "WARNING: FoldX and PDBFixer/OpenMM were not found; using simple residue-name substitution backend for smoke testing only."
+      echo "Run scripts/install_foldx.sh, set FOLDX_BIN, or enable PDBFixer/OpenMM for better interim mutant models."
     fi
   fi
 elif [ "$STRUCTURE_BACKEND" = "foldx" ]; then
@@ -86,6 +101,8 @@ elif [ "$STRUCTURE_BACKEND" = "foldx" ]; then
       FOLDX_ARG=(--foldx-bin "$FOLDX_BIN")
     fi
   fi
+elif [ "$STRUCTURE_BACKEND" = "pdbfixer" ]; then
+  ensure_pdbfixer_backend
 fi
 promut-md build-mutants \
   --wild-type-pdb "$GB1_DIR/1PGA.pdb" \

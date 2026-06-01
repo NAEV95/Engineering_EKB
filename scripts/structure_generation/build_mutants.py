@@ -205,12 +205,63 @@ def _build_with_foldx_backend(wild_type_pdb, mutations, output_path, foldx_bin):
     return records
 
 
+def _write_pdbfixer_output(topology, positions, output_file):
+    from openmm.app import PDBFile
+
+    with open(output_file, "w", encoding="utf-8") as handle:
+        try:
+            PDBFile.writeFile(topology, positions, handle, keepIds=True)
+        except TypeError:
+            PDBFile.writeFile(topology, positions, handle)
+
+
+def _build_with_pdbfixer_backend(wild_type_pdb, mutations, output_path):
+    try:
+        from pdbfixer import PDBFixer
+    except ImportError as exc:
+        raise ImportError(
+            "PDBFixer backend requires optional dependencies. Install them with "
+            "`python -m pip install openmm pdbfixer` or use the workstation E2E "
+            "script, which can install them automatically."
+        ) from exc
+
+    records = []
+    for mutation in mutations:
+        fixer = PDBFixer(filename=str(wild_type_pdb))
+        mutation_code = (
+            f"{AA_1_TO_3[mutation['wild_type']]}-"
+            f"{mutation['position']}-"
+            f"{AA_1_TO_3[mutation['mutant']]}"
+        )
+        fixer.applyMutations([mutation_code], mutation["chain"])
+        fixer.findMissingAtoms()
+        fixer.addMissingAtoms()
+        fixer.addMissingHydrogens(7.0)
+
+        output_file = output_path / f"{mutation['mutation_id']}.pdb"
+        _write_pdbfixer_output(fixer.topology, fixer.positions, output_file)
+        _validate_mutant_pdb(output_file, mutation)
+        records.append(
+            {
+                **mutation,
+                "pdb": str(output_file),
+                "backend_status": "pdbfixer_mutation_rebuild",
+                "pdbfixer_mutation_code": mutation_code,
+                "pdbfixer_ph": 7.0,
+            }
+        )
+
+    return records
+
+
 def build_mutant_structures(wild_type_pdb, mutations_file, output_dir, backend="foldx", foldx_bin=None):
     """Create one modelled PDB per mutation row and return the manifest path.
 
     The default ``foldx`` backend runs RepairPDB and BuildModel, validates the
-    expected mutant residue, and records FoldX provenance. The ``simple`` backend
-    is retained for plumbing tests only; it does not rebuild side chains.
+    expected mutant residue, and records FoldX provenance. The ``pdbfixer``
+    backend is an open-source interim option that rebuilds missing atoms and
+    hydrogens from templates. The ``simple`` backend is retained for plumbing
+    tests only; it does not rebuild side chains.
     """
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -241,6 +292,12 @@ def build_mutant_structures(wild_type_pdb, mutations_file, output_dir, backend="
         manifest["note"] = "FoldX RepairPDB + BuildModel backend; inspect FoldX output before production MD."
         manifest["foldx_bin"] = foldx_bin or "foldx"
         manifest["structures"] = _build_with_foldx_backend(wild_type_pdb, mutations, output_path, foldx_bin)
+    elif backend == "pdbfixer":
+        manifest["note"] = (
+            "Open-source PDBFixer backend; applies mutations and rebuilds missing atoms/hydrogens. "
+            "Prefer FoldX when available for production mutant modelling."
+        )
+        manifest["structures"] = _build_with_pdbfixer_backend(wild_type_pdb, mutations, output_path)
     elif backend == "simple":
         manifest["note"] = "Residue-name substitution only; no side-chain rebuild or relaxation performed."
         manifest["structures"] = _build_with_simple_backend(wild_type_structure, mutations, output_path)
@@ -258,7 +315,7 @@ def main(argv=None):
     parser.add_argument("--wild-type-pdb", required=True)
     parser.add_argument("--mutations", required=True, help="CSV mutation table")
     parser.add_argument("--output-dir", required=True)
-    parser.add_argument("--backend", choices=["foldx", "simple"], default="foldx")
+    parser.add_argument("--backend", choices=["foldx", "pdbfixer", "simple"], default="foldx")
     parser.add_argument("--foldx-bin", default=None, help="Path/name of FoldX executable for --backend foldx")
     args = parser.parse_args(argv)
     build_mutant_structures(args.wild_type_pdb, args.mutations, args.output_dir, args.backend, args.foldx_bin)

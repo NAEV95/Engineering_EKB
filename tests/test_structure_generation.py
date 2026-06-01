@@ -4,6 +4,7 @@ import pandas as pd
 
 import json
 import stat
+import sys
 
 import pytest
 
@@ -62,6 +63,19 @@ def test_production_backend_requires_foldx_binary(tmp_path):
 
     with pytest.raises(FileNotFoundError, match="FoldX executable"):
         build_mutant_structures(str(wt), str(mutations), str(tmp_path / "mutants"), backend="foldx", foldx_bin="missing-foldx")
+
+
+def test_pdbfixer_backend_reports_missing_optional_dependency(tmp_path, monkeypatch):
+    wt = tmp_path / "wt.pdb"
+    wt.write_text(PDB_TEXT)
+    mutations = tmp_path / "mutations.csv"
+    pd.DataFrame({"mutation_id": ["A1V"], "chain": ["A"], "wild_type": ["A"], "position": [1], "mutant": ["V"]}).to_csv(
+        mutations, index=False
+    )
+    monkeypatch.setitem(sys.modules, "pdbfixer", None)
+
+    with pytest.raises(ImportError, match="PDBFixer backend requires optional dependencies"):
+        build_mutant_structures(str(wt), str(mutations), str(tmp_path / "mutants"), backend="pdbfixer")
 
 
 def test_foldx_backend_invokes_repair_and_buildmodel(tmp_path):
