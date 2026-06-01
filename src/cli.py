@@ -43,6 +43,8 @@ def build_parser():
     build_mutants.add_argument("--wild-type-pdb", required=True)
     build_mutants.add_argument("--mutations", required=True)
     build_mutants.add_argument("--output-dir", required=True)
+    build_mutants.add_argument("--backend", choices=["foldx", "simple"], default="foldx")
+    build_mutants.add_argument("--foldx-bin", default=None)
 
     cleanup = subparsers.add_parser("cleanup", help="Clean generated artifacts")
     cleanup.add_argument("--dry-run", action="store_true")
@@ -120,7 +122,10 @@ def main(argv=None):
     if args.command == "build-mutants":
         from scripts.structure_generation.build_mutants import build_mutant_structures
 
-        build_mutant_structures(args.wild_type_pdb, args.mutations, args.output_dir)
+        try:
+            build_mutant_structures(args.wild_type_pdb, args.mutations, args.output_dir, args.backend, args.foldx_bin)
+        except (FileNotFoundError, ValueError, RuntimeError) as exc:
+            parser.error(str(exc))
         return 0
 
     if args.command == "cleanup":

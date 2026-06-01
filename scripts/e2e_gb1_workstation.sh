@@ -44,10 +44,21 @@ L5A,A,L,5,A,GB1 public DMS plumbing test mutation
 CSV
 
 echo "== Build mutant structures =="
+STRUCTURE_BACKEND="${PROMUT_STRUCTURE_BACKEND:-}"
+if [ -z "$STRUCTURE_BACKEND" ]; then
+  if command -v foldx >/dev/null 2>&1; then
+    STRUCTURE_BACKEND="foldx"
+  else
+    STRUCTURE_BACKEND="simple"
+    echo "WARNING: FoldX was not found; using simple residue-name substitution backend for smoke testing only."
+    echo "Set PROMUT_STRUCTURE_BACKEND=foldx after installing FoldX for production mutant models."
+  fi
+fi
 promut-md build-mutants \
   --wild-type-pdb "$GB1_DIR/1PGA.pdb" \
   --mutations "$GB1_DIR/gb1_mutations.csv" \
-  --output-dir "$GB1_DIR/mutants"
+  --output-dir "$GB1_DIR/mutants" \
+  --backend "$STRUCTURE_BACKEND"
 
 echo "== Stage MD inputs =="
 python scripts/md_simulations/run_md.py \
