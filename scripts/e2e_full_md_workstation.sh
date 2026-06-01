@@ -11,6 +11,7 @@ PROMUT_USE_GROMACS_CONTAINER="${PROMUT_USE_GROMACS_CONTAINER:-auto}"
 MD_STEPS="${PROMUT_FULL_MD_STEPS:-500}"
 EQUIL_STEPS="${PROMUT_FULL_MD_EQUIL_STEPS:-100}"
 MAX_MUTANTS="${PROMUT_FULL_MD_MAX_MUTANTS:-5}"
+MDRUN_MODE="${PROMUT_FULL_MD_MDRUN_MODE:-cpu}"
 
 mkdir -p "$WORK_ROOT"
 cd "$ROOT_DIR"
@@ -97,6 +98,7 @@ run_gmx() {
 }
 
 run_gmx --version | head -20
+echo "GROMACS mdrun mode: $MDRUN_MODE"
 
 GB1_DIR="$WORK_ROOT/gb1"
 FULL_MD_DIR="$WORK_ROOT/full_md"
@@ -212,6 +214,14 @@ strip_xvg() {
   grep -v '^[#@]' "$1" > "$2"
 }
 
+run_mdrun() {
+  if [ "$MDRUN_MODE" = "gpu" ]; then
+    run_gmx mdrun "$@"
+  else
+    run_gmx mdrun "$@" -nb cpu -pme cpu -bonded cpu -update cpu -ntmpi 1
+  fi
+}
+
 run_one_md() {
   local pdb="$1"
   local name
@@ -231,11 +241,11 @@ run_one_md() {
       printf 'SOL\n' | run_gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral -conc 0.15
     fi
     run_gmx grompp -f minim.mdp -c solv_ions.gro -p topol.top -o em.tpr -maxwarn 2
-    run_gmx mdrun -deffnm em
+    run_mdrun -deffnm em
     run_gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr -maxwarn 2
-    run_gmx mdrun -deffnm nvt
+    run_mdrun -deffnm nvt
     run_gmx grompp -f md.mdp -c nvt.gro -t nvt.cpt -p topol.top -o md.tpr -maxwarn 2
-    run_gmx mdrun -deffnm md
+    run_mdrun -deffnm md
 
     printf '0\n' | run_gmx trjconv -s md.tpr -f md.xtc -o md_noPBC.xtc -pbc mol -ur compact
     printf '4\n4\n' | run_gmx rms -s md.tpr -f md_noPBC.xtc -o rmsd_backbone_raw.xvg -tu ps

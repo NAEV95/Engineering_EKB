@@ -84,3 +84,9 @@ GROMACS_CONTAINER=nvcr.io/hpc/gromacs:2023.2 bash scripts/e2e_full_md_workstatio
 ```
 
 This requires Docker with NVIDIA Container Toolkit and a recent host NVIDIA driver. The RTX PRO 6000 Blackwell workstation is expected to work with the container when `docker run --gpus all ... nvidia-smi` can see the GPUs.
+
+The default full-MD E2E uses CPU `mdrun` inside the container for broad compatibility with Blackwell GPUs and older GROMACS container builds. To opt into GPU `mdrun` with a compatible image:
+
+```bash
+PROMUT_FULL_MD_MDRUN_MODE=gpu GROMACS_CONTAINER=<compatible-image> bash scripts/e2e_full_md_workstation.sh
+```
