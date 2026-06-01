@@ -234,6 +234,7 @@ def _build_with_pdbfixer_backend(wild_type_pdb, mutations, output_path):
             f"{AA_1_TO_3[mutation['mutant']]}"
         )
         fixer.applyMutations([mutation_code], mutation["chain"])
+        fixer.findMissingResidues()
         fixer.findMissingAtoms()
         fixer.addMissingAtoms()
         fixer.addMissingHydrogens(7.0)

@@ -5,6 +5,7 @@ import pandas as pd
 import json
 import stat
 import sys
+import types
 
 import pytest
 
@@ -76,6 +77,65 @@ def test_pdbfixer_backend_reports_missing_optional_dependency(tmp_path, monkeypa
 
     with pytest.raises(ImportError, match="PDBFixer backend requires optional dependencies"):
         build_mutant_structures(str(wt), str(mutations), str(tmp_path / "mutants"), backend="pdbfixer")
+
+
+def test_pdbfixer_backend_initializes_missing_residues_before_atoms(tmp_path, monkeypatch):
+    wt = tmp_path / "wt.pdb"
+    wt.write_text(PDB_TEXT)
+    mutations = tmp_path / "mutations.csv"
+    pd.DataFrame({"mutation_id": ["A1V"], "chain": ["A"], "wild_type": ["A"], "position": [1], "mutant": ["V"]}).to_csv(
+        mutations, index=False
+    )
+    calls = []
+
+    class FakePDBFixer:
+        def __init__(self, filename):
+            self.filename = filename
+            self.topology = object()
+            self.positions = object()
+
+        def applyMutations(self, mutations_arg, chain):
+            calls.append(("applyMutations", mutations_arg, chain))
+
+        def findMissingResidues(self):
+            calls.append(("findMissingResidues",))
+            self.missingResidues = {}
+
+        def findMissingAtoms(self):
+            calls.append(("findMissingAtoms",))
+            assert hasattr(self, "missingResidues")
+
+        def addMissingAtoms(self):
+            calls.append(("addMissingAtoms",))
+
+        def addMissingHydrogens(self, ph):
+            calls.append(("addMissingHydrogens", ph))
+
+    class FakePDBFile:
+        @staticmethod
+        def writeFile(topology, positions, handle, keepIds=True):
+            handle.write(PDB_TEXT.replace("ALA A   1", "VAL A   1"))
+
+    fake_pdbfixer = types.ModuleType("pdbfixer")
+    fake_pdbfixer.PDBFixer = FakePDBFixer
+    fake_openmm = types.ModuleType("openmm")
+    fake_openmm_app = types.ModuleType("openmm.app")
+    fake_openmm_app.PDBFile = FakePDBFile
+    monkeypatch.setitem(sys.modules, "pdbfixer", fake_pdbfixer)
+    monkeypatch.setitem(sys.modules, "openmm", fake_openmm)
+    monkeypatch.setitem(sys.modules, "openmm.app", fake_openmm_app)
+
+    manifest_file = build_mutant_structures(str(wt), str(mutations), str(tmp_path / "mutants"), backend="pdbfixer")
+
+    manifest = json.loads(Path(manifest_file).read_text())
+    assert manifest["backend"] == "pdbfixer"
+    assert calls[:5] == [
+        ("applyMutations", ["ALA-1-VAL"], "A"),
+        ("findMissingResidues",),
+        ("findMissingAtoms",),
+        ("addMissingAtoms",),
+        ("addMissingHydrogens", 7.0),
+    ]
 
 
 def test_foldx_backend_invokes_repair_and_buildmodel(tmp_path):
