@@ -47,7 +47,7 @@ L5A,A,L,5,A,GB1 public DMS plumbing test mutation
 CSV
 
 echo "== Build mutant structures =="
-STRUCTURE_BACKEND="${PROMUT_STRUCTURE_BACKEND:-}"
+STRUCTURE_BACKEND="${PROMUT_STRUCTURE_BACKEND:-pdbfixer}"
 FOLDX_ARG=()
 ensure_pdbfixer_backend() {
   if python -c 'import pdbfixer, openmm' >/dev/null 2>&1; then
@@ -61,37 +61,7 @@ ensure_pdbfixer_backend() {
   python -c 'import pdbfixer, openmm'
 }
 
-if [ -z "$STRUCTURE_BACKEND" ]; then
-  if command -v foldx >/dev/null 2>&1; then
-    STRUCTURE_BACKEND="foldx"
-  elif [ -x "$FOLDX_BIN" ]; then
-    STRUCTURE_BACKEND="foldx"
-    FOLDX_ARG=(--foldx-bin "$FOLDX_BIN")
-  else
-    LOCAL_FOLDX_ARCHIVE="$(find "$FOLDX_INSTALL_DIR" -maxdepth 1 -type f \
-      \( -iname 'foldx*.zip' -o -iname 'foldx*.tar.gz' -o -iname 'foldx*.tgz' -o -iname 'foldx*.tar.bz2' -o -iname 'foldx*.tbz2' \) \
-      2>/dev/null | head -n 1 || true)"
-    if [ -n "${FOLDX_DOWNLOAD_URL:-}" ] || [ -n "${FOLDX_ARCHIVE:-}" ] || [ -n "$LOCAL_FOLDX_ARCHIVE" ]; then
-      echo "FoldX was not found; attempting install via scripts/install_foldx.sh"
-      bash scripts/install_foldx.sh || true
-    fi
-  fi
-
-  if [ -z "$STRUCTURE_BACKEND" ]; then
-    if command -v foldx >/dev/null 2>&1; then
-      STRUCTURE_BACKEND="foldx"
-    elif [ -x "$FOLDX_BIN" ]; then
-      STRUCTURE_BACKEND="foldx"
-      FOLDX_ARG=(--foldx-bin "$FOLDX_BIN")
-    elif ensure_pdbfixer_backend; then
-      STRUCTURE_BACKEND="pdbfixer"
-    else
-      STRUCTURE_BACKEND="simple"
-      echo "WARNING: FoldX and PDBFixer/OpenMM were not found; using simple residue-name substitution backend for smoke testing only."
-      echo "Run scripts/install_foldx.sh, set FOLDX_BIN, or enable PDBFixer/OpenMM for better interim mutant models."
-    fi
-  fi
-elif [ "$STRUCTURE_BACKEND" = "foldx" ]; then
+if [ "$STRUCTURE_BACKEND" = "foldx" ]; then
   if [ -x "$FOLDX_BIN" ]; then
     FOLDX_ARG=(--foldx-bin "$FOLDX_BIN")
   elif ! command -v foldx >/dev/null 2>&1; then
@@ -102,7 +72,11 @@ elif [ "$STRUCTURE_BACKEND" = "foldx" ]; then
     fi
   fi
 elif [ "$STRUCTURE_BACKEND" = "pdbfixer" ]; then
-  ensure_pdbfixer_backend
+  if ! ensure_pdbfixer_backend; then
+    STRUCTURE_BACKEND="simple"
+    echo "WARNING: PDBFixer/OpenMM could not be installed; using simple residue-name substitution backend for smoke testing only."
+    echo "Install openmm/pdbfixer or set PROMUT_ALLOW_PDBFIXER_INSTALL=1 for the default rebuild backend."
+  fi
 fi
 promut-md build-mutants \
   --wild-type-pdb "$GB1_DIR/1PGA.pdb" \

@@ -43,7 +43,7 @@ def build_parser():
     build_mutants.add_argument("--wild-type-pdb", required=True)
     build_mutants.add_argument("--mutations", required=True)
     build_mutants.add_argument("--output-dir", required=True)
-    build_mutants.add_argument("--backend", choices=["foldx", "pdbfixer", "simple"], default="foldx")
+    build_mutants.add_argument("--backend", choices=["foldx", "pdbfixer", "simple"], default="pdbfixer")
     build_mutants.add_argument("--foldx-bin", default=None)
 
     cleanup = subparsers.add_parser("cleanup", help="Clean generated artifacts")

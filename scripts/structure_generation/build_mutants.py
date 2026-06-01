@@ -255,14 +255,14 @@ def _build_with_pdbfixer_backend(wild_type_pdb, mutations, output_path):
     return records
 
 
-def build_mutant_structures(wild_type_pdb, mutations_file, output_dir, backend="foldx", foldx_bin=None):
+def build_mutant_structures(wild_type_pdb, mutations_file, output_dir, backend="pdbfixer", foldx_bin=None):
     """Create one modelled PDB per mutation row and return the manifest path.
 
-    The default ``foldx`` backend runs RepairPDB and BuildModel, validates the
-    expected mutant residue, and records FoldX provenance. The ``pdbfixer``
-    backend is an open-source interim option that rebuilds missing atoms and
-    hydrogens from templates. The ``simple`` backend is retained for plumbing
-    tests only; it does not rebuild side chains.
+    The default ``pdbfixer`` backend is an open-source option that applies
+    mutations and rebuilds missing atoms/hydrogens from templates. The ``foldx``
+    backend runs RepairPDB and BuildModel when licensed FoldX is available. The
+    ``simple`` backend is retained for plumbing tests only; it does not rebuild
+    side chains.
     """
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -316,7 +316,7 @@ def main(argv=None):
     parser.add_argument("--wild-type-pdb", required=True)
     parser.add_argument("--mutations", required=True, help="CSV mutation table")
     parser.add_argument("--output-dir", required=True)
-    parser.add_argument("--backend", choices=["foldx", "pdbfixer", "simple"], default="foldx")
+    parser.add_argument("--backend", choices=["foldx", "pdbfixer", "simple"], default="pdbfixer")
     parser.add_argument("--foldx-bin", default=None, help="Path/name of FoldX executable for --backend foldx")
     args = parser.parse_args(argv)
     build_mutant_structures(args.wild_type_pdb, args.mutations, args.output_dir, args.backend, args.foldx_bin)

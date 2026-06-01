@@ -2,7 +2,21 @@
 
 `promut-md build-mutants` creates one PDB per point mutation from a wild-type PDB and a CSV mutation table.
 
-## Production Backend
+## Default Backend
+
+By default, `promut-md build-mutants` uses the open-source PDBFixer/OpenMM backend:
+
+```bash
+python -m pip install openmm pdbfixer
+promut-md build-mutants \
+  --wild-type-pdb wt.pdb \
+  --mutations mutations.csv \
+  --output-dir mutants
+```
+
+This applies mutations with PDBFixer templates, rebuilds missing atoms, adds hydrogens at pH 7.0, and validates the requested residue.
+
+## FoldX Backend
 
 Use the FoldX backend for production-oriented mutant structures:
 
@@ -16,21 +30,6 @@ promut-md build-mutants \
 ```
 
 The FoldX backend runs `RepairPDB` followed by `BuildModel`, validates that the requested residue was introduced, and writes `mutant_manifest.json` with FoldX run directories and mutation codes.
-
-## Open-Source Interim Backend
-
-If FoldX is not available yet, use the PDBFixer/OpenMM backend:
-
-```bash
-python -m pip install openmm pdbfixer
-promut-md build-mutants \
-  --wild-type-pdb wt.pdb \
-  --mutations mutations.csv \
-  --output-dir mutants \
-  --backend pdbfixer
-```
-
-This applies mutations with PDBFixer templates, rebuilds missing atoms, adds hydrogens at pH 7.0, and validates the requested residue. It is a better interim backend than simple residue-name substitution, but FoldX remains preferred when available for production mutant modelling.
 
 ## Installing FoldX
 

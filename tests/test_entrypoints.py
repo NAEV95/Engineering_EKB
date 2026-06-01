@@ -28,6 +28,24 @@ def test_console_cli_help_works_after_install():
     assert "ProMut-MD" in result.stdout
 
 
+def test_build_mutants_default_backend_is_pdbfixer():
+    from src.cli import build_parser
+
+    args = build_parser().parse_args(
+        [
+            "build-mutants",
+            "--wild-type-pdb",
+            "wt.pdb",
+            "--mutations",
+            "mutations.csv",
+            "--output-dir",
+            "mutants",
+        ]
+    )
+
+    assert args.backend == "pdbfixer"
+
+
 def test_full_pipeline_all_stages_skipped_completes(tmp_path):
     result = run_cmd(
         sys.executable,
