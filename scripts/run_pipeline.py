@@ -15,12 +15,6 @@ from pathlib import Path
 # Add src to path for importing
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.data.data_loader import load_data
-from src.features.build_features import extract_features
-from src.models.train_model import train_model
-from src.models.evaluate_model import evaluate_model
-from src.visualization.visualize import generate_visualizations
-
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
@@ -62,19 +56,19 @@ def run_md_simulations(config):
     logger.info("Starting MD simulations")
     # Import here to avoid dependencies for users who skip this step
     from scripts.md_simulations.run_md import run_simulations
-    
+
     # Create timestamp for output
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = os.path.join(config['paths']['data']['processed'], f"md_results_{timestamp}")
     os.makedirs(output_dir, exist_ok=True)
-    
+
     # Run simulations
     run_simulations(
         input_dir=config['paths']['data']['raw'],
         output_dir=output_dir,
         params=config['md_simulation']
     )
-    
+
     logger.info(f"MD simulations completed. Results saved to {output_dir}")
     return output_dir
 
@@ -83,18 +77,18 @@ def run_feature_extraction(config, md_results_dir):
     logger.info("Starting feature extraction")
     # Import here to avoid dependencies for users who skip this step
     from scripts.feature_extraction.extract_features import extract_all_features
-    
+
     # Create timestamp for output
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_file = os.path.join(config['paths']['data']['processed'], f"features_{timestamp}.csv")
-    
+
     # Extract features
     extract_all_features(
         md_dir=md_results_dir,
         output_file=output_file,
         params=config['feature_extraction']
     )
-    
+
     logger.info(f"Feature extraction completed. Results saved to {output_file}")
     return output_file
 
@@ -103,51 +97,61 @@ def main():
     # Parse arguments and load config
     args = parse_arguments()
     config = load_config(args.config)
-    
+
     # Override output directory if specified
     if args.output_dir:
         for key in config['paths']['data']:
             config['paths']['data'][key] = os.path.join(args.output_dir, key)
         config['paths']['figures'] = os.path.join(args.output_dir, 'figures')
         config['paths']['models'] = os.path.join(args.output_dir, 'models')
-    
+
     # Create output directories
     for path in config['paths']['data'].values():
         os.makedirs(path, exist_ok=True)
     os.makedirs(config['paths']['figures'], exist_ok=True)
     os.makedirs(config['paths']['models'], exist_ok=True)
-    
-    # Step 1: Run MD simulations
+
+    md_results_dir = None
+    features_file = None
+    model_file = None
+    results_file = None
+
+    # Step 1: Run MD simulations, only when feature extraction needs MD output.
     if not args.skip_md:
         md_results_dir = run_md_simulations(config)
-    else:
+    elif not args.skip_features:
         logger.info("Skipping MD simulations")
         # Use most recent directory in processed data
-        md_dirs = [d for d in os.listdir(config['paths']['data']['processed']) 
+        md_dirs = [d for d in os.listdir(config['paths']['data']['processed'])
                  if d.startswith('md_results_') and os.path.isdir(
                      os.path.join(config['paths']['data']['processed'], d))]
         if not md_dirs:
             logger.error("No MD simulation results found. Cannot proceed.")
             sys.exit(1)
-        md_results_dir = os.path.join(config['paths']['data']['processed'], 
+        md_results_dir = os.path.join(config['paths']['data']['processed'],
                                      sorted(md_dirs)[-1])  # Most recent
-    
+    else:
+        logger.info("Skipping MD simulations")
+
     # Step 2: Extract features
     if not args.skip_features:
         features_file = run_feature_extraction(config, md_results_dir)
     else:
         logger.info("Skipping feature extraction")
-        # Use most recent features file in processed data
-        feature_files = [f for f in os.listdir(config['paths']['data']['processed']) 
-                       if f.startswith('features_') and f.endswith('.csv')]
-        if not feature_files:
-            logger.error("No feature files found. Cannot proceed.")
-            sys.exit(1)
-        features_file = os.path.join(config['paths']['data']['processed'], 
-                                   sorted(feature_files)[-1])  # Most recent
-    
+        if not (args.skip_training and args.skip_evaluation and args.skip_visualization):
+            # Use most recent features file in processed data
+            feature_files = [f for f in os.listdir(config['paths']['data']['processed'])
+                           if f.startswith('features_') and f.endswith('.csv')]
+            if not feature_files:
+                logger.error("No feature files found. Cannot proceed.")
+                sys.exit(1)
+            features_file = os.path.join(config['paths']['data']['processed'],
+                                       sorted(feature_files)[-1])  # Most recent
+
     # Step 3: Train model
     if not args.skip_training:
+        from src.models.train_model import train_model
+
         logger.info("Starting model training")
         model_file = train_model(
             features_file=features_file,
@@ -156,18 +160,21 @@ def main():
         )
     else:
         logger.info("Skipping model training")
-        # Use most recent model file in models directory
-        model_files = [f for f in os.listdir(config['paths']['models']) 
-                     if f.endswith('.pkl')]
-        if not model_files:
-            logger.error("No model files found. Cannot proceed with evaluation.")
-            model_file = None
-        else:
-            model_file = os.path.join(config['paths']['models'], 
-                                    sorted(model_files)[-1])  # Most recent
-    
+        if not (args.skip_evaluation and args.skip_visualization):
+            # Use most recent model file in models directory
+            model_files = [f for f in os.listdir(config['paths']['models'])
+                         if f.endswith('.pkl')]
+            if not model_files:
+                logger.error("No model files found. Cannot proceed with evaluation or visualization.")
+                model_file = None
+            else:
+                model_file = os.path.join(config['paths']['models'],
+                                        sorted(model_files)[-1])  # Most recent
+
     # Step 4: Evaluate model
     if not args.skip_evaluation and model_file:
+        from src.models.evaluate_model import evaluate_model
+
         logger.info("Starting model evaluation")
         results_file = evaluate_model(
             model_file=model_file,
@@ -177,10 +184,11 @@ def main():
         )
     else:
         logger.info("Skipping model evaluation")
-        results_file = None
-    
+
     # Step 5: Generate visualizations
     if not args.skip_visualization:
+        from src.visualization.visualize import generate_visualizations
+
         logger.info("Generating visualizations")
         generate_visualizations(
             features_file=features_file,
@@ -191,8 +199,8 @@ def main():
         )
     else:
         logger.info("Skipping visualization generation")
-    
+
     logger.info("Pipeline completed successfully")
 
 if __name__ == "__main__":
-    main() 
+    main()

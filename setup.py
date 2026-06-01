@@ -1,6 +1,12 @@
+from pathlib import Path
+
 from setuptools import setup, find_packages
 
-with open("README.md", "r", encoding="utf-8") as fh:
+readme_path = Path("README.md")
+if not readme_path.exists():
+    readme_path = Path("ReadMe.md")
+
+with readme_path.open("r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 with open("requirements.txt", "r", encoding="utf-8") as fh:
@@ -15,7 +21,8 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/Naev95/ProMut-MD",
-    packages=find_packages(include=["src", "src.*"]),
+    packages=find_packages(include=["src", "src.*", "scripts", "scripts.*"]),
+    py_modules=["run_pipeline_no_mds"],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
@@ -30,4 +37,4 @@ setup(
             "promut-md=src.cli:main",
         ],
     },
-) 
+)

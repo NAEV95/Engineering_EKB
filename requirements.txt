@@ -15,6 +15,7 @@ lightgbm>=3.1.1
 shap>=0.38.0
 eli5>=0.10.1
 optuna>=3.0.0
+lazypredict>=0.2.12
 
 # Bioinformatics
 biopython>=1.78
@@ -31,4 +32,4 @@ PyYAML>=5.4.0
 openpyxl>=3.0.0
 
 # Testing
-pytest>=6.2.0 
+pytest>=6.2.0
