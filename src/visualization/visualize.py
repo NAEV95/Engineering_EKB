@@ -110,7 +110,18 @@ def plot_shap_summary(model_data, features_df, output_dir, params):
     # Assume target column is 'DELTA30'
     target_column = params.get('target_column', 'DELTA30')
     X = features_df.drop(target_column, axis=1)
-    
+    if shap_values is not None and hasattr(shap_values, "shape") and len(shap_values.shape) >= 2:
+        shap_rows = shap_values.shape[0]
+        if shap_rows != len(X):
+            logger.warning(
+                "SHAP values contain %d rows but feature data contains %d rows; "
+                "using the first %d feature rows for the summary plot.",
+                shap_rows,
+                len(X),
+                min(shap_rows, len(X)),
+            )
+            X = X.iloc[:shap_rows]
+
     # Create SHAP summary plot
     plt.figure(figsize=(12, 8))
     shap.summary_plot(shap_values, X, show=False)
@@ -441,4 +452,4 @@ if __name__ == "__main__":
         args.results,
         args.output_dir,
         config.get('visualization', {})
-    ) 
+    )
