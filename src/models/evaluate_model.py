@@ -154,7 +154,13 @@ def analyze_by_range(y_true, y_pred):
     
     return range_analysis.to_dict(orient='records')
 
-def save_evaluation(metrics, residual_stats, range_analysis, output_dir):
+def _to_json_list(values):
+    if hasattr(values, "tolist"):
+        return values.tolist()
+    return list(values)
+
+
+def save_evaluation(metrics, residual_stats, range_analysis, output_dir, y_test=None, y_pred=None):
     """Save evaluation results to file"""
     logger.info("Saving evaluation results")
     
@@ -168,6 +174,10 @@ def save_evaluation(metrics, residual_stats, range_analysis, output_dir):
         'residual_stats': residual_stats,
         'range_analysis': range_analysis
     }
+
+    if y_test is not None and y_pred is not None:
+        evaluation['y_test'] = _to_json_list(y_test)
+        evaluation['y_pred'] = _to_json_list(y_pred)
     
     # Save as JSON file
     results_file = os.path.join(output_dir, f"evaluation_{timestamp}.json")
@@ -201,7 +211,7 @@ def evaluate_model(model_file, features_file, output_dir, params):
     range_analysis = analyze_by_range(y_test, y_pred)
     
     # Save evaluation results
-    results_file = save_evaluation(metrics, residual_stats, range_analysis, output_dir)
+    results_file = save_evaluation(metrics, residual_stats, range_analysis, output_dir, y_test, y_pred)
     
     return results_file
 

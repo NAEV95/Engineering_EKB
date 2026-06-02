@@ -287,6 +287,11 @@ def plot_performance_by_range(results_data, output_dir, params):
         range_df = pd.DataFrame(range_analysis)
     else:
         range_df = pd.DataFrame([range_analysis])
+
+    required_columns = {'bin', 'mae', 'r2'}
+    if range_df.empty or not required_columns.issubset(range_df.columns):
+        logger.warning("Range analysis data is empty or incomplete; skipping performance by range plots")
+        return
     
     # Create bar plot for MAE by range
     plt.figure(figsize=(12, 6))
