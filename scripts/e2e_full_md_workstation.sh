@@ -196,7 +196,7 @@ strip_xvg() {
 
 run_mdrun() {
   if [ "$MDRUN_MODE" = "gpu" ]; then
-    run_gmx mdrun "$@"
+    run_gmx mdrun "$@" -ntmpi 1
   else
     run_gmx mdrun "$@" -nb cpu -pme cpu -bonded cpu -update cpu -ntmpi 1
   fi

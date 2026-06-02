@@ -18,3 +18,8 @@ def test_full_md_script_defaults_to_gpu_mode():
 def test_full_md_script_uses_resolve_gromacs_bin():
     text = SCRIPT.read_text(encoding="utf-8")
     assert 'GMX_BIN="$(resolve_gromacs_bin)"' in text
+
+
+def test_gpu_smoke_mdrun_uses_one_thread_mpi_rank():
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert 'run_gmx mdrun "$@" -ntmpi 1' in text
