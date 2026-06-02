@@ -2,16 +2,17 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT_DIR/scripts/gromacs_env.sh"
+
 WORK_ROOT="${PROMUT_FULL_MD_ROOT:-$HOME/raid/promut-md-full-md-e2e}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 GMX_BIN="${GMX_BIN:-}"
-GROMACS_CONTAINER="${GROMACS_CONTAINER:-nvcr.io/hpc/gromacs:2023.2}"
-GROMACS_CONTAINER_FALLBACKS="${GROMACS_CONTAINER_FALLBACKS:-nvcr.io/hpc/gromacs:2023.2 nvcr.io/hpc/gromacs:2022.5}"
-PROMUT_USE_GROMACS_CONTAINER="${PROMUT_USE_GROMACS_CONTAINER:-auto}"
+GROMACS_CONTAINER="${GROMACS_CONTAINER:-}"
+PROMUT_USE_GROMACS_CONTAINER="${PROMUT_USE_GROMACS_CONTAINER:-0}"
 MD_STEPS="${PROMUT_FULL_MD_STEPS:-500}"
 EQUIL_STEPS="${PROMUT_FULL_MD_EQUIL_STEPS:-100}"
 MAX_MUTANTS="${PROMUT_FULL_MD_MAX_MUTANTS:-5}"
-MDRUN_MODE="${PROMUT_FULL_MD_MDRUN_MODE:-cpu}"
+MDRUN_MODE="${PROMUT_FULL_MD_MDRUN_MODE:-gpu}"
 
 mkdir -p "$WORK_ROOT"
 cd "$ROOT_DIR"
@@ -39,49 +40,21 @@ python -m pytest -q
 
 echo "== GROMACS check =="
 GMX_MODE="native"
-if [ -z "$GMX_BIN" ]; then
-  GMX_BIN="$(command -v gmx || command -v gmx_mpi || true)"
-fi
-if [ -z "$GMX_BIN" ]; then
-  if [ "$PROMUT_USE_GROMACS_CONTAINER" = "0" ]; then
-    cat >&2 <<'EOF'
-GROMACS was not found and container fallback is disabled.
-
-Install GROMACS, set GMX_BIN=/path/to/gmx, or rerun with container fallback enabled.
-EOF
+if [ "$PROMUT_USE_GROMACS_CONTAINER" = "1" ]; then
+  if [ -z "$GROMACS_CONTAINER" ]; then
+    echo "PROMUT_USE_GROMACS_CONTAINER=1 requires GROMACS_CONTAINER to be set." >&2
     exit 2
   fi
   if ! command -v docker >/dev/null 2>&1; then
-    cat >&2 <<'EOF'
-GROMACS was not found, and Docker is not installed or not on PATH.
-
-Install GROMACS directly, or install Docker plus NVIDIA Container Toolkit.
-You can also set GMX_BIN=/path/to/gmx.
-EOF
+    echo "Container mode requested, but Docker is not installed or not on PATH." >&2
     exit 2
   fi
   GMX_MODE="container"
-  echo "Native GROMACS was not found; using NGC container: $GROMACS_CONTAINER"
-  if ! docker pull "$GROMACS_CONTAINER"; then
-    pulled_container=""
-    for candidate in $GROMACS_CONTAINER_FALLBACKS; do
-      if [ "$candidate" = "$GROMACS_CONTAINER" ]; then
-        continue
-      fi
-      echo "Failed to pull $GROMACS_CONTAINER; trying fallback: $candidate"
-      if docker pull "$candidate"; then
-        pulled_container="$candidate"
-        break
-      fi
-    done
-    if [ -z "$pulled_container" ]; then
-      echo "Could not pull any configured GROMACS container image." >&2
-      echo "Set GROMACS_CONTAINER to a valid NGC GROMACS tag and rerun." >&2
-      exit 2
-    fi
-    GROMACS_CONTAINER="$pulled_container"
-  fi
+  docker pull "$GROMACS_CONTAINER"
+else
+  GMX_BIN="$(resolve_gromacs_bin)"
 fi
+check_gpu_runtime "$MDRUN_MODE"
 
 run_gmx() {
   if [ "$GMX_MODE" = "native" ]; then
@@ -93,7 +66,7 @@ run_gmx() {
       --volume "$WORK_ROOT:$WORK_ROOT" \
       --workdir "$PWD" \
       "$GROMACS_CONTAINER" \
-      /usr/bin/nventry -build_base_dir=/usr/local/gromacs -build_default=avx2_256 gmx "$@"
+      gmx "$@"
   fi
 }
 
@@ -102,6 +75,7 @@ echo "GROMACS mdrun mode: $MDRUN_MODE"
 
 GB1_DIR="$WORK_ROOT/gb1"
 FULL_MD_DIR="$WORK_ROOT/full_md"
+SIM_INPUT_DIR="$WORK_ROOT/sim_inputs"
 FEATURES_FILE="$WORK_ROOT/features/full_md_features.csv"
 TARGET_FILE="$WORK_ROOT/features/full_md_targets.csv"
 CONFIG_FILE="$WORK_ROOT/full_md_config.yml"
@@ -109,8 +83,8 @@ MODEL_DIR="$WORK_ROOT/models"
 RESULTS_DIR="$WORK_ROOT/results"
 FIGURES_DIR="$WORK_ROOT/figures"
 
-rm -rf "$GB1_DIR" "$FULL_MD_DIR" "$WORK_ROOT/features" "$MODEL_DIR" "$RESULTS_DIR" "$FIGURES_DIR"
-mkdir -p "$GB1_DIR" "$FULL_MD_DIR" "$WORK_ROOT/features" "$MODEL_DIR" "$RESULTS_DIR" "$FIGURES_DIR"
+rm -rf "$GB1_DIR" "$FULL_MD_DIR" "$SIM_INPUT_DIR" "$WORK_ROOT/features" "$MODEL_DIR" "$RESULTS_DIR" "$FIGURES_DIR"
+mkdir -p "$GB1_DIR" "$FULL_MD_DIR" "$SIM_INPUT_DIR" "$WORK_ROOT/features" "$MODEL_DIR" "$RESULTS_DIR" "$FIGURES_DIR"
 
 echo "== GB1 test inputs =="
 curl -L https://files.rcsb.org/download/1PGA.pdb -o "$GB1_DIR/1PGA.pdb"
@@ -130,12 +104,18 @@ promut-md build-mutants \
   --mutations "$GB1_DIR/gb1_mutations.csv" \
   --output-dir "$GB1_DIR/mutants"
 
+cp "$GB1_DIR/1PGA.pdb" "$SIM_INPUT_DIR/wild_type.pdb"
+find "$GB1_DIR/mutants" -maxdepth 1 -type f -name '*.pdb' | sort | head -n "$MAX_MUTANTS" | while read -r mutant_pdb; do
+  cp "$mutant_pdb" "$SIM_INPUT_DIR/$(basename "$mutant_pdb")"
+done
+
 python - <<'PY' "$GB1_DIR/gb1_mutations.csv" "$TARGET_FILE"
 import pandas as pd
 import sys
 
 mutations = pd.read_csv(sys.argv[1])
 targets = mutations[["mutation_id", "DELTA30"]].set_index("mutation_id")
+targets.loc["wild_type", "DELTA30"] = 0.0
 targets.to_csv(sys.argv[2])
 PY
 
@@ -261,14 +241,14 @@ run_one_md() {
 }
 
 echo "== Run short real GROMACS MD =="
-for pdb in "$GB1_DIR"/mutants/*.pdb; do
+for pdb in "$SIM_INPUT_DIR"/*.pdb; do
   run_one_md "$pdb"
 done
 
 cat > "$CONFIG_FILE" <<EOF
 paths:
   data:
-    raw: $GB1_DIR/mutants
+    raw: $SIM_INPUT_DIR
     processed: $WORK_ROOT/features
     results: $RESULTS_DIR
   figures: $FIGURES_DIR
